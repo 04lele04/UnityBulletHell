@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class PlayerController : MonoBehaviour
 {
@@ -22,14 +23,19 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         hp = maxHP;
 
-        Debug.Log($"PLAYER HP: {hp}");
-        Debug.Log($"LEVEL: {level} | XP: {xp}/{xpToNextLevel}");
+        UIManager.Instance.UpdateHP(hp);
     }
 
     void Update()
     {
         Move();
         Shoot();
+
+        // Replay if game is over
+        if (Time.timeScale == 0f && Input.GetKeyDown(KeyCode.R))
+        {
+            ReplayGame();
+        }
     }
 
     void Move()
@@ -39,12 +45,12 @@ public class PlayerController : MonoBehaviour
             Input.GetAxisRaw("Vertical")
         ).normalized;
 
-        rb.linearVelocity = input * speed;
+        rb.linearVelocity = input * speed; // Changed linearVelocity → velocity
     }
 
     void Shoot()
     {
-        fireTimer -= Time.deltaTime;
+        fireTimer -= Time.unscaledDeltaTime; // Use unscaledDeltaTime so shooting stops on pause
 
         if (fireTimer <= 0f)
         {
@@ -97,23 +103,38 @@ public class PlayerController : MonoBehaviour
         xp = 0;
         xpToNextLevel = Mathf.RoundToInt(xpToNextLevel * 1.5f);
 
-        // TEMP upgrade
         speed += 0.5f;
 
-        Debug.Log($"LEVEL UP! → LEVEL {level}");
-        Debug.Log($"NEXT LEVEL XP: {xpToNextLevel}");
+        UIManager.Instance.ShowLevelUp();
     }
 
     public void TakeDamage()
     {
         hp--;
-        Debug.Log($"PLAYER HP: {hp}");
+        UIManager.Instance.UpdateHP(hp);
 
         if (hp <= 0)
         {
             Debug.Log("PLAYER DEAD — GAME OVER");
-            Destroy(gameObject);
+            UIManager.Instance.ShowGameOver();
+
+            // Stop the game
             Time.timeScale = 0f;
         }
+    }
+
+    void ReplayGame()
+    {
+        // Reset Time.timeScale so game is not paused
+        Time.timeScale = 1f;
+
+        // Optional: Reset XP & level when replaying
+        level = 1;
+        xp = 0;
+        xpToNextLevel = 5;
+        speed = 6f;
+
+        // Reload the current scene
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 }

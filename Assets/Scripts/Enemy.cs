@@ -24,7 +24,7 @@ public class Enemy : MonoBehaviour
         Vector2 dir =
             ((Vector2)player.position - (Vector2)transform.position).normalized;
 
-        rb.velocity = dir * speed;
+        rb.linearVelocity = dir * speed;
     }
 
     public void TakeDamage(int dmg)
