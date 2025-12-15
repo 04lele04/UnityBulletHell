@@ -4,55 +4,117 @@ public class Enemy : MonoBehaviour
 {
     public static int enemiesKilled = 0;
 
+    [Header("Statistiche")]
     public int hp = 2;
     public float speed = 2f;
     public int xpReward = 1;
 
-    Transform player;
-    Rigidbody2D rb;
+    [Header("Opzionale - Effetti")]
+    public GameObject deathEffectPrefab;
+
+    private Transform player;
+    private Rigidbody2D rb;
+    private bool isDead = false;
+
+    // Event per notificare la morte
+    public System.Action OnDeath;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        player = GameObject.FindGameObjectWithTag("Player")?.transform;
+
+        if (rb == null)
+        {
+            Debug.LogError("Enemy richiede un Rigidbody2D!");
+            enabled = false;
+            return;
+        }
+
+        // Cache del player
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+        if (playerObj != null)
+        {
+            player = playerObj.transform;
+        }
+        else
+        {
+            Debug.LogWarning("Player non trovato! Assicurati che abbia il tag 'Player'");
+        }
     }
 
     void FixedUpdate()
     {
-        if (player == null) return;
+        if (isDead || player == null) return;
 
-        Vector2 dir =
-            ((Vector2)player.position - (Vector2)transform.position).normalized;
-
-        rb.linearVelocity = dir * speed;
+        // Movimento verso il player
+        Vector2 direction = ((Vector2)player.position - rb.position).normalized;
+        rb.linearVelocity = direction * speed;
     }
 
-    public System.Action OnDeath;
-
-    public void TakeDamage(int dmg)
+    public void TakeDamage(int damage)
     {
-        hp -= dmg;
+        if (isDead) return;
+
+        hp -= damage;
 
         if (hp <= 0)
         {
-            enemiesKilled++;
-            Debug.Log($"ENEMIES KILLED: {enemiesKilled}");
-
-            PlayerController pc = player.GetComponent<PlayerController>();
-            if (pc != null)
-                pc.GainXP(xpReward);
-
-            OnDeath?.Invoke();
-            Destroy(gameObject);
+            Die();
         }
     }
 
-    void OnTriggerEnter2D(Collider2D col)
+    void Die()
     {
-        if (col.CompareTag("Player"))
+        if (isDead) return;
+        isDead = true;
+
+        // Incrementa statistiche globali
+        enemiesKilled++;
+
+        // Dai XP al player
+        if (player != null)
         {
-            col.GetComponent<PlayerController>().TakeDamage();
-            Destroy(gameObject);
+            PlayerController pc = player.GetComponent<PlayerController>();
+            if (pc != null)
+            {
+                pc.GainXP(xpReward);
+            }
         }
+
+        // Notifica death event PRIMA di distruggere l'oggetto
+        OnDeath?.Invoke();
+
+        // Effetto morte opzionale
+        if (deathEffectPrefab != null)
+        {
+            Instantiate(deathEffectPrefab, transform.position, Quaternion.identity);
+        }
+
+        // Distruggi nemico
+        Destroy(gameObject);
+    }
+
+    void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (isDead) return;
+
+        if (collision.CompareTag("Player"))
+        {
+            PlayerController pc = collision.GetComponent<PlayerController>();
+            if (pc != null)
+            {
+                pc.TakeDamage();
+            }
+
+            // Il nemico si sacrifica colpendo il player
+            Die();
+        }
+    }
+
+    // Cleanup per evitare memory leak
+    void OnDestroy()
+    {
+        // Rimuovi tutti i subscriber dall'evento
+        OnDeath = null;
     }
 }

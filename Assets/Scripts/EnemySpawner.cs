@@ -1,59 +1,70 @@
 using UnityEngine;
-using TMPro; // TextMeshPro
+using TMPro;
 using System.Collections;
 
 public class EnemySpawner : MonoBehaviour
 {
+    [Header("Prefab")]
     public GameObject enemyPrefab;
 
-    // UI
+    [Header("UI")]
     public TMP_Text waveText;
     public TMP_Text enemiesText;
     public TMP_Text nextWaveText;
 
-    // Parametri base
+    [Header("Parametri Base")]
     public float spawnRate = 1f;
     public int baseEnemyCount = 5;
     public float baseEnemySpeed = 2f;
     public int baseEnemyHP = 2;
 
-    // Incrementi per wave
+    [Header("Incrementi per Wave")]
     public float spawnRateDecreasePerWave = 0.05f;
     public float speedIncreasePerWave = 0.1f;
     public int hpIncreasePerWave = 1;
     public int enemyCountIncreasePerWave = 2;
 
-    private float timer;
+    [Header("Intervallo tra Wave")]
+    public float timeBetweenWaves = 2f;
+
+    private float spawnTimer;
     private int currentWave = 1;
     private int enemiesSpawned = 0;
     private int enemiesAlive = 0;
     private int enemiesInWave = 0;
     private float currentSpawnRate;
-
-    // Flag per evitare coroutine multiple
-    private bool preparingNextWave = false;
+    private bool isWaveActive = false;
+    private bool isPreparingNextWave = false;
 
     void Start()
     {
-        if (nextWaveText != null)
-            nextWaveText.text = "";
+        if (enemyPrefab == null)
+        {
+            Debug.LogError("EnemyPrefab non assegnato!");
+            enabled = false;
+            return;
+        }
+
+        ClearNextWaveText();
         StartWave();
     }
 
     void Update()
     {
+        if (!isWaveActive) return;
+
+        // Spawn nemici durante la wave
         if (enemiesSpawned < enemiesInWave)
         {
-            timer -= Time.deltaTime;
-            if (timer <= 0f)
+            spawnTimer -= Time.deltaTime;
+            if (spawnTimer <= 0f)
             {
-                timer = currentSpawnRate;
+                spawnTimer = currentSpawnRate;
                 SpawnEnemy();
             }
         }
-
-        // Controlla la fine della wave
-        if (enemiesSpawned >= enemiesInWave && enemiesAlive <= 0 && !preparingNextWave)
+        // Verifica fine wave: tutti i nemici sono stati spawnati E non ci sono più nemici vivi
+        else if (enemiesAlive <= 0 && !isPreparingNextWave)
         {
             StartCoroutine(PrepareNextWave());
         }
@@ -63,46 +74,80 @@ public class EnemySpawner : MonoBehaviour
 
     void StartWave()
     {
+        // Calcola parametri della wave
         enemiesInWave = baseEnemyCount + (currentWave - 1) * enemyCountIncreasePerWave;
         currentSpawnRate = Mathf.Max(0.1f, spawnRate - (currentWave - 1) * spawnRateDecreasePerWave);
+
+        // Reset contatori
         enemiesSpawned = 0;
-        enemiesAlive = 0; // <- inizializza a 0, aumenterà ad ogni spawn
-        preparingNextWave = false;
+        enemiesAlive = 0;
+        spawnTimer = 0f; // Spawn immediato del primo nemico
 
-        if (nextWaveText != null)
-            nextWaveText.text = "";
+        // Reset flag
+        isWaveActive = true;
+        isPreparingNextWave = false;
 
-        Debug.Log($"Wave {currentWave} - Nemici: {enemiesInWave}, SpawnRate: {currentSpawnRate}");
+        ClearNextWaveText();
+
+        Debug.Log($"<color=cyan>Wave {currentWave} iniziata</color> - Nemici: {enemiesInWave}, SpawnRate: {currentSpawnRate:F2}s");
     }
 
     void SpawnEnemy()
     {
-        Vector2 pos = Random.insideUnitCircle.normalized * 7f;
-        GameObject enemy = Instantiate(enemyPrefab, pos, Quaternion.identity);
+        // Spawn in posizione casuale fuori dallo schermo
+        Vector2 spawnPos = Random.insideUnitCircle.normalized * 7f;
+        GameObject enemyObj = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
 
-        Enemy e = enemy.GetComponent<Enemy>();
-        e.hp = baseEnemyHP + (currentWave - 1) * hpIncreasePerWave;
-        e.speed = baseEnemySpeed + (currentWave - 1) * speedIncreasePerWave;
-
-        enemiesAlive++; // <- incremento reale solo quando il nemico esiste
-        enemiesSpawned++;
-
-        e.OnDeath += () =>
+        Enemy enemy = enemyObj.GetComponent<Enemy>();
+        if (enemy == null)
         {
-            enemiesAlive--;
-            if (enemiesAlive < 0)
-                enemiesAlive = 0; // sicurezza
-        };
+            Debug.LogError("Il prefab Enemy non ha il component Enemy!");
+            Destroy(enemyObj);
+            return;
+        }
+
+        // Configura statistiche del nemico
+        enemy.hp = baseEnemyHP + (currentWave - 1) * hpIncreasePerWave;
+        enemy.speed = baseEnemySpeed + (currentWave - 1) * speedIncreasePerWave;
+
+        // Incrementa contatori
+        enemiesSpawned++;
+        enemiesAlive++;
+
+        // Sottoscrivi evento morte
+        enemy.OnDeath += OnEnemyDeath;
+
+        Debug.Log($"Nemico #{enemiesSpawned}/{enemiesInWave} spawnato - HP: {enemy.hp}, Speed: {enemy.speed:F1}");
+    }
+
+    void OnEnemyDeath()
+    {
+        enemiesAlive--;
+
+        // Sanity check
+        if (enemiesAlive < 0)
+        {
+            Debug.LogWarning("enemiesAlive è negativo! Ripristino a 0.");
+            enemiesAlive = 0;
+        }
+
+        Debug.Log($"Nemico ucciso - Rimasti: {enemiesAlive}/{enemiesInWave}");
     }
 
     IEnumerator PrepareNextWave()
     {
-        preparingNextWave = true;
+        isPreparingNextWave = true;
+        isWaveActive = false;
+
+        Debug.Log($"<color=yellow>Wave {currentWave} completata!</color>");
+
+        // Mostra messaggio next wave
         if (nextWaveText != null)
-            nextWaveText.text = "Next Wave Incoming!";
+            nextWaveText.text = $"Wave {currentWave + 1} in arrivo...";
 
-        yield return new WaitForSeconds(2f);
+        yield return new WaitForSeconds(timeBetweenWaves);
 
+        // Incrementa wave e ricomincia
         currentWave++;
         StartWave();
     }
@@ -111,7 +156,21 @@ public class EnemySpawner : MonoBehaviour
     {
         if (waveText != null)
             waveText.text = $"Wave: {currentWave}";
+
         if (enemiesText != null)
-            enemiesText.text = $"Enemies Left: {enemiesAlive}";
+            enemiesText.text = $"Nemici: {enemiesAlive}";
+    }
+
+    void ClearNextWaveText()
+    {
+        if (nextWaveText != null)
+            nextWaveText.text = "";
+    }
+
+    // Debug visuale in Scene View
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(Vector3.zero, 7f);
     }
 }
