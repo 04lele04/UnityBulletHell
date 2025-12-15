@@ -27,6 +27,8 @@ public class Enemy : MonoBehaviour
         rb.linearVelocity = dir * speed;
     }
 
+    public System.Action OnDeath;
+
     public void TakeDamage(int dmg)
     {
         hp -= dmg;
@@ -40,6 +42,7 @@ public class Enemy : MonoBehaviour
             if (pc != null)
                 pc.GainXP(xpReward);
 
+            OnDeath?.Invoke();
             Destroy(gameObject);
         }
     }
