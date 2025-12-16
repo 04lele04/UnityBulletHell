@@ -1,42 +1,67 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using System.Collections.Generic;
 
 public class PlayerController : MonoBehaviour
 {
-    [Header("Movement")]
-    public float speed = 6f;
-    
-    [Header("Health")]
-    public int maxHP = 3;
-    public int hp;
-    
-    [Header("Shooting")]
-    public GameObject bulletPrefab;
-    public float fireRate = 0.15f;
-    public int bulletDamage = 1;
-    public int projectileCount = 1; // Numero di proiettili per raffica
-    public float spreadAngle = 15f; // Angolo di spread tra i proiettili
-    
     [Header("XP / Level")]
     public int level = 1;
     public int xp = 0;
     public int xpToNextLevel = 5;
-    
-    float fireTimer;
+
+    [Header("Health (from character)")]
+    private int maxHP = 3;
+    private int hp;
+
+    [Header("Movement (from character)")]
+    private float baseSpeed = 6f;
+
+    // Weapon firing
+    private List<float> weaponFireTimers = new List<float>();
+
     Rigidbody2D rb;
+    CharacterManager characterManager;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        hp = maxHP;
+        characterManager = CharacterManager.Instance;
+
+        if (characterManager == null)
+        {
+            Debug.LogError("CharacterManager not found! Cannot initialize player.");
+            enabled = false;
+            return;
+        }
+
+        // Initialize from selected character
+        CharacterData character = characterManager.GetSelectedCharacter();
+        if (character != null)
+        {
+            maxHP = character.baseMaxHP;
+            baseSpeed = character.baseSpeed;
+            hp = maxHP;
+
+            Debug.Log($"Playing as: {character.characterName}");
+            Debug.Log($"Passive: {character.passiveDescription}");
+        }
+        else
+        {
+            Debug.LogError("No character selected!");
+        }
+
+        // Initialize weapon timers
+        RefreshWeaponTimers();
+
         UIManager.Instance.UpdateHP(hp, maxHP);
+        UIManager.Instance.UpdateXP(xp, xpToNextLevel);
     }
 
     void Update()
     {
         Move();
-        Shoot();
-        
+        ShootAllWeapons();
+
         if (Time.timeScale == 0f && Input.GetKeyDown(KeyCode.R))
         {
             ReplayGame();
@@ -49,39 +74,77 @@ public class PlayerController : MonoBehaviour
             Input.GetAxisRaw("Horizontal"),
             Input.GetAxisRaw("Vertical")
         ).normalized;
-        rb.linearVelocity = input * speed;
+
+        // Apply speed stat multiplier
+        float speedMultiplier = 1f + characterManager.GetStatMultiplier(StatType.Speed);
+        float finalSpeed = baseSpeed * speedMultiplier;
+
+        rb.linearVelocity = input * finalSpeed;
     }
 
-    void Shoot()
+    void ShootAllWeapons()
     {
-        fireTimer -= Time.deltaTime;
-        if (fireTimer <= 0f)
+        List<WeaponInstance> weapons = characterManager.GetEquippedWeapons();
+
+        // Ensure we have enough timers
+        while (weaponFireTimers.Count < weapons.Count)
         {
-            fireTimer = fireRate;
-            Enemy target = FindNearestEnemy();
-            if (target != null)
+            weaponFireTimers.Add(0f);
+        }
+
+        for (int i = 0; i < weapons.Count; i++)
+        {
+            WeaponInstance weapon = weapons[i];
+            weaponFireTimers[i] -= Time.deltaTime;
+
+            if (weaponFireTimers[i] <= 0f)
             {
-                Vector2 baseDir = (target.transform.position - transform.position).normalized;
-                
-                // Spara multipli proiettili con spread
-                for (int i = 0; i < projectileCount; i++)
-                {
-                    float angle = 0f;
-                    
-                    if (projectileCount > 1)
-                    {
-                        // Calcola l'angolo per ogni proiettile
-                        float totalSpread = spreadAngle * (projectileCount - 1);
-                        angle = -totalSpread / 2 + (spreadAngle * i);
-                    }
-                    
-                    Vector2 dir = Quaternion.Euler(0, 0, angle) * baseDir;
-                    
-                    PlayerBullet bullet = Instantiate(bulletPrefab, transform.position, Quaternion.identity)
-                        .GetComponent<PlayerBullet>();
-                    bullet.damage = bulletDamage;
-                    bullet.Init(dir);
-                }
+                // Apply fire rate stat multiplier (lower is better)
+                float fireRateMultiplier = 1f - characterManager.GetStatMultiplier(StatType.FireRate);
+                fireRateMultiplier = Mathf.Max(0.1f, fireRateMultiplier); // Prevent zero or negative
+
+                weaponFireTimers[i] = weapon.fireRate * fireRateMultiplier;
+                FireWeapon(weapon);
+            }
+        }
+    }
+
+    void FireWeapon(WeaponInstance weapon)
+    {
+        Enemy target = FindNearestEnemy();
+        if (target == null) return;
+
+        Vector2 baseDir = (target.transform.position - transform.position).normalized;
+
+        // Apply projectile quantity stat (additive)
+        int bonusProjectiles = Mathf.RoundToInt(characterManager.GetStatMultiplier(StatType.ProjectileQuantity));
+        int totalProjectiles = weapon.projectileCount + bonusProjectiles;
+
+        // Shoot multiple projectiles with spread
+        for (int i = 0; i < totalProjectiles; i++)
+        {
+            float angle = 0f;
+
+            if (totalProjectiles > 1)
+            {
+                float totalSpread = weapon.spreadAngle * (totalProjectiles - 1);
+                angle = -totalSpread / 2 + (weapon.spreadAngle * i);
+            }
+
+            Vector2 dir = Quaternion.Euler(0, 0, angle) * baseDir;
+
+            PlayerBullet bullet = Instantiate(weapon.data.bulletPrefab, transform.position, Quaternion.identity)
+                .GetComponent<PlayerBullet>();
+
+            if (bullet != null)
+            {
+                // Apply damage stat multiplier (percentage increase)
+                float damageMultiplier = 1f + characterManager.GetStatMultiplier(StatType.Damage);
+                int finalDamage = Mathf.RoundToInt(weapon.damage * damageMultiplier);
+
+                bullet.damage = finalDamage;
+                bullet.speed = weapon.bulletSpeed;
+                bullet.Init(dir);
             }
         }
     }
@@ -91,6 +154,7 @@ public class PlayerController : MonoBehaviour
         Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);
         float minDist = Mathf.Infinity;
         Enemy nearest = null;
+
         foreach (Enemy e in enemies)
         {
             float d = Vector2.Distance(transform.position, e.transform.position);
@@ -100,6 +164,7 @@ public class PlayerController : MonoBehaviour
                 nearest = e;
             }
         }
+
         return nearest;
     }
 
@@ -108,7 +173,7 @@ public class PlayerController : MonoBehaviour
         xp += amount;
         UIManager.Instance.UpdateXP(xp, xpToNextLevel);
         Debug.Log($"XP GAINED: +{amount} ({xp}/{xpToNextLevel})");
-        
+
         if (xp >= xpToNextLevel)
             LevelUp();
     }
@@ -118,56 +183,19 @@ public class PlayerController : MonoBehaviour
         level++;
         xp = 0;
         xpToNextLevel = Mathf.RoundToInt(xpToNextLevel * 1.5f);
-        
+
         UIManager.Instance.UpdateXP(xp, xpToNextLevel);
         UIManager.Instance.ShowUpgradeMenu();
-        
-        // Pausa il gioco durante la scelta
-        Time.timeScale = 0f;
-    }
 
-    // Metodi per applicare i potenziamenti
-    public void ApplyUpgrade(UpgradeType type)
-    {
-        switch (type)
-        {
-            case UpgradeType.Damage:
-                bulletDamage += 1;
-                Debug.Log($"Danno aumentato a {bulletDamage}");
-                break;
-                
-            case UpgradeType.Speed:
-                speed += 1f;
-                Debug.Log($"Velocità aumentata a {speed}");
-                break;
-                
-            case UpgradeType.Health:
-                maxHP += 1;
-                hp = maxHP; // Cura completamente
-                UIManager.Instance.UpdateHP(hp, maxHP);
-                Debug.Log($"HP massimi aumentati a {maxHP}");
-                break;
-                
-            case UpgradeType.FireRate:
-                fireRate = Mathf.Max(0.05f, fireRate - 0.02f);
-                Debug.Log($"Fire rate migliorato a {fireRate}s");
-                break;
-                
-            case UpgradeType.ProjectileCount:
-                projectileCount += 1;
-                Debug.Log($"Proiettili per raffica: {projectileCount}");
-                break;
-        }
-        
-        // Riprendi il gioco
-        Time.timeScale = 1f;
+        // Pause the game during upgrade selection
+        Time.timeScale = 0f;
     }
 
     public void TakeDamage()
     {
         hp--;
         UIManager.Instance.UpdateHP(hp, maxHP);
-        
+
         if (hp <= 0)
         {
             Debug.Log("PLAYER DEAD — GAME OVER");
@@ -182,13 +210,22 @@ public class PlayerController : MonoBehaviour
         Enemy.enemiesKilled = 0;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
-}
 
-public enum UpgradeType
-{
-    Damage,
-    Speed,
-    Health,
-    FireRate,
-    ProjectileCount
+    // Helper to refresh weapon timers when weapons are added
+    void RefreshWeaponTimers()
+    {
+        List<WeaponInstance> weapons = characterManager.GetEquippedWeapons();
+        weaponFireTimers.Clear();
+
+        foreach (WeaponInstance weapon in weapons)
+        {
+            weaponFireTimers.Add(0f); // Start ready to fire
+        }
+    }
+
+    // Called by UIManager when a weapon is unlocked
+    public void OnWeaponUnlocked()
+    {
+        RefreshWeaponTimers();
+    }
 }

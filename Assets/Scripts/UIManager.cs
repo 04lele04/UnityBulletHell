@@ -10,7 +10,7 @@ public class UIManager : MonoBehaviour
     
     [Header("HUD")]
     public TMP_Text hpText;
-    public TMP_Text xpText; // NUOVO - aggiungi questo nell'Inspector
+    public TMP_Text xpText;
     
     [Header("Notifications")]
     public TMP_Text levelUpText;
@@ -18,11 +18,11 @@ public class UIManager : MonoBehaviour
     
     [Header("Upgrade Menu")]
     public GameObject upgradePanel;
-    public GameObject upgradeButtonPrefab;
-    public Transform upgradeButtonContainer;
+    public GameObject upgradeCardPrefab;
+    public Transform upgradeCardContainer;
     
     private Coroutine levelUpCoroutine;
-    private List<GameObject> activeUpgradeButtons = new List<GameObject>();
+    private List<GameObject> activeUpgradeCards = new List<GameObject>();
 
     void Awake()
     {
@@ -31,27 +31,22 @@ public class UIManager : MonoBehaviour
 
     void Start()
     {
-        levelUpText.gameObject.SetActive(false);
-        gameOverText.gameObject.SetActive(false);
+        if (levelUpText != null)
+            levelUpText.gameObject.SetActive(false);
         
-        // Nascondi il panel all'inizio
+        if (gameOverText != null)
+            gameOverText.gameObject.SetActive(false);
+        
         if (upgradePanel != null)
             upgradePanel.SetActive(false);
     }
 
-    // METODO VECCHIO (compatibile con il tuo codice originale)
-    public void UpdateHP(int hp)
-    {
-        hpText.text = $"HP: {hp}";
-    }
-    
-    // METODO NUOVO (overload con maxHP)
     public void UpdateHP(int hp, int maxHP)
     {
-        hpText.text = $"HP: {hp}/{maxHP}";
+        if (hpText != null)
+            hpText.text = $"HP: {hp}/{maxHP}";
     }
     
-    // NUOVO METODO per aggiornare XP
     public void UpdateXP(int xp, int xpToNext)
     {
         if (xpText != null)
@@ -70,100 +65,97 @@ public class UIManager : MonoBehaviour
 
     IEnumerator LevelUpRoutine()
     {
-        levelUpText.gameObject.SetActive(true);
-        yield return new WaitForSeconds(1.5f);
-        levelUpText.gameObject.SetActive(false);
+        if (levelUpText != null)
+        {
+            levelUpText.gameObject.SetActive(true);
+            yield return new WaitForSecondsRealtime(1.5f); // Use realtime since game is paused
+            levelUpText.gameObject.SetActive(false);
+        }
         levelUpCoroutine = null;
     }
 
-    // NUOVO METODO per mostrare il menu degli upgrade
     public void ShowUpgradeMenu()
     {
-        // Se non hai ancora configurato il panel, mostra solo il level up text
-        if (upgradePanel == null || upgradeButtonPrefab == null || upgradeButtonContainer == null)
+        // Fallback if upgrade system not configured
+        if (upgradePanel == null || upgradeCardPrefab == null || upgradeCardContainer == null)
         {
-            Debug.LogWarning("Upgrade Panel non configurato! Configura i riferimenti nell'Inspector.");
+            Debug.LogWarning("Upgrade Panel not configured!");
             ShowLevelUp();
-            Time.timeScale = 1f; // Riprendi subito il gioco
+            Time.timeScale = 1f;
             return;
         }
         
-        // Pulisci bottoni precedenti
-        foreach (GameObject btn in activeUpgradeButtons)
+        if (CardGenerator.Instance == null)
         {
-            Destroy(btn);
-        }
-        activeUpgradeButtons.Clear();
-        
-        // Scegli 3 upgrade casuali
-        List<UpgradeType> availableUpgrades = new List<UpgradeType>
-        {
-            UpgradeType.Damage,
-            UpgradeType.Speed,
-            UpgradeType.Health,
-            UpgradeType.FireRate,
-            UpgradeType.ProjectileCount
-        };
-        
-        // Mescola la lista
-        for (int i = 0; i < availableUpgrades.Count; i++)
-        {
-            UpgradeType temp = availableUpgrades[i];
-            int randomIndex = Random.Range(i, availableUpgrades.Count);
-            availableUpgrades[i] = availableUpgrades[randomIndex];
-            availableUpgrades[randomIndex] = temp;
+            Debug.LogError("CardGenerator not found!");
+            Time.timeScale = 1f;
+            return;
         }
         
-        int optionsToShow = Mathf.Min(3, availableUpgrades.Count);
-        
-        for (int i = 0; i < optionsToShow; i++)
+        // Clear previous cards
+        foreach (GameObject card in activeUpgradeCards)
         {
-            UpgradeType upgradeType = availableUpgrades[i];
-            GameObject btn = Instantiate(upgradeButtonPrefab, upgradeButtonContainer);
+            Destroy(card);
+        }
+        activeUpgradeCards.Clear();
+        
+        // Generate 3 cards
+        List<UpgradeCard> cards = CardGenerator.Instance.GenerateCards(3);
+        
+        if (cards.Count == 0)
+        {
+            Debug.LogWarning("No upgrade cards available!");
+            Time.timeScale = 1f;
+            return;
+        }
+        
+        // Create card UI
+        foreach (UpgradeCard card in cards)
+        {
+            GameObject cardObj = Instantiate(upgradeCardPrefab, upgradeCardContainer);
             
-            // Configura il bottone
-            TMP_Text btnText = btn.GetComponentInChildren<TMP_Text>();
-            if (btnText != null)
-                btnText.text = GetUpgradeDescription(upgradeType);
+            // Setup card visuals
+            TMP_Text cardText = cardObj.GetComponentInChildren<TMP_Text>();
+            if (cardText != null)
+                cardText.text = card.displayText;
             
-            Button button = btn.GetComponent<Button>();
+            Image cardIcon = cardObj.transform.Find("Icon")?.GetComponent<Image>();
+            if (cardIcon != null && card.icon != null)
+                cardIcon.sprite = card.icon;
+            
+            // Setup button
+            Button button = cardObj.GetComponent<Button>();
             if (button != null)
-                button.onClick.AddListener(() => OnUpgradeSelected(upgradeType));
+            {
+                // Capture card in closure
+                UpgradeCard selectedCard = card;
+                button.onClick.AddListener(() => OnCardSelected(selectedCard));
+            }
             
-            activeUpgradeButtons.Add(btn);
+            activeUpgradeCards.Add(cardObj);
         }
         
         upgradePanel.SetActive(true);
     }
 
-    string GetUpgradeDescription(UpgradeType type)
+    void OnCardSelected(UpgradeCard card)
     {
-        switch (type)
-        {
-            case UpgradeType.Damage:
-                return "⚔️ DANNO +1\nColpisci più forte";
-            case UpgradeType.Speed:
-                return "⚡ VELOCITÀ +1\nMuoviti più velocemente";
-            case UpgradeType.Health:
-                return "❤️ VITA +1\nAumenta HP massimi e cura";
-            case UpgradeType.FireRate:
-                return "🔫 CADENZA +\nSpara più velocemente";
-            case UpgradeType.ProjectileCount:
-                return "🌟 PROIETTILI +1\nSpara più proiettili";
-            default:
-                return "Upgrade";
-        }
-    }
-
-    void OnUpgradeSelected(UpgradeType type)
-    {
-        upgradePanel.SetActive(false);
+        if (upgradePanel != null)
+            upgradePanel.SetActive(false);
         
-        PlayerController player = FindObjectOfType<PlayerController>();
-        if (player != null)
+        // Apply the card effect
+        CardGenerator.Instance.ApplyCard(card);
+        
+        // Notify player if weapon was unlocked (to refresh timers)
+        if (card.cardType == CardType.WeaponUnlock)
         {
-            player.ApplyUpgrade(type);
+            PlayerController player = FindObjectOfType<PlayerController>();
+            if (player != null)
+                player.OnWeaponUnlocked();
         }
+        
+        // Resume game
+        Time.timeScale = 1f;
     }
 
     public void ShowGameOver()
@@ -174,14 +166,17 @@ public class UIManager : MonoBehaviour
             levelUpCoroutine = null;
         }
         
-        levelUpText.gameObject.SetActive(false);
+        if (levelUpText != null)
+            levelUpText.gameObject.SetActive(false);
         
         if (upgradePanel != null)
             upgradePanel.SetActive(false);
         
-        // Mostra stats finali
-        gameOverText.text = $"GAME OVER\n\nNemici uccisi: {Enemy.enemiesKilled}\n\nPremi R per riavviare";
-        gameOverText.gameObject.SetActive(true);
+        if (gameOverText != null)
+        {
+            gameOverText.text = $"GAME OVER\n\nNemici uccisi: {Enemy.enemiesKilled}\n\nPremi R per riavviare";
+            gameOverText.gameObject.SetActive(true);
+        }
         
         Time.timeScale = 0f;
     }
