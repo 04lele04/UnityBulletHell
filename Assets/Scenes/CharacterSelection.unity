@@ -806,12 +806,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   availableCharacters:
   - {fileID: 11400000, guid: bfd3d96f7d1e5fa42bceb6be5bf30f84, type: 2}
+  - {fileID: 11400000, guid: 1aaf94d521d9d884387b63926b99ab0e, type: 2}
   allWeapons:
   - {fileID: 11400000, guid: b53b54b066328bf4099965328261313c, type: 2}
+  - {fileID: 11400000, guid: 0b89e6feae29d22429caa5f0a1eca11a, type: 2}
   allWeaponUpgrades:
   - {fileID: 11400000, guid: 916645cb2167dd94dac8b8abf764134c, type: 2}
   - {fileID: 11400000, guid: 192a8826bb4021a4f9f5f70c12fe05bb, type: 2}
   - {fileID: 11400000, guid: c5824f50afaaf184daaaa7057de64272, type: 2}
+  - {fileID: 11400000, guid: 6016cf8e1b70cfa47a12c603d49c63bd, type: 2}
+  - {fileID: 11400000, guid: 9349cded12fb4e346a55cf0ee1d461df, type: 2}
+  - {fileID: 11400000, guid: aee162f0f501f334ca5c0ed9c9deca28, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
