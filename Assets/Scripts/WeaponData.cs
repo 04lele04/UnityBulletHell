@@ -19,4 +19,7 @@ public class WeaponData : ScriptableObject
     [Header("Upgrades")]
     public int damagePerUpgrade = 1;
     public int projectileCountPerUpgrade = 1;
+    public float fireRatePerUPgrade = 1f;
+
+
 }

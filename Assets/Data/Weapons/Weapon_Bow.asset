@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35216e04ca854be40b8e941f78255682, type: 3}
+  m_Name: Weapon_Bow
+  m_EditorClassIdentifier: 
+  weaponName: Bow
+  description: Rapid piercing arrows
+  icon: {fileID: 0}
+  bulletPrefab: {fileID: 4733139543642701161, guid: 688eb42615a0fd749bcbe6f2ac8ebb88, type: 3}
+  baseDamage: 1
+  fireRate: 0.3
+  projectileCount: 1
+  spreadAngle: 15
+  bulletSpeed: 12
+  damagePerUpgrade: 1
+  projectileCountPerUpgrade: 1
+  fireRatePerUPgrade: 1

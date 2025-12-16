@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2e60b10be439c614c9f67cbf6281bcc8, type: 3}
+  m_Name: Gun_DamageUpgrade
+  m_EditorClassIdentifier: 
+  targetWeapon: {fileID: 11400000, guid: f4a94d7735d3a3841b4572ad9bd5e1de, type: 2}
+  upgradeType: 0
+  displayName: Gun_DamageUpgrade
+  description: 
+  icon: {fileID: 0}

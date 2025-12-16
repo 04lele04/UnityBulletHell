@@ -7,20 +7,20 @@ using System.Collections.Generic;
 public class UIManager : MonoBehaviour
 {
     public static UIManager Instance;
-    
+
     [Header("HUD")]
     public TMP_Text hpText;
     public TMP_Text xpText;
-    
+
     [Header("Notifications")]
     public TMP_Text levelUpText;
     public TMP_Text gameOverText;
-    
+
     [Header("Upgrade Menu")]
     public GameObject upgradePanel;
     public GameObject upgradeCardPrefab;
     public Transform upgradeCardContainer;
-    
+
     private Coroutine levelUpCoroutine;
     private List<GameObject> activeUpgradeCards = new List<GameObject>();
 
@@ -33,10 +33,10 @@ public class UIManager : MonoBehaviour
     {
         if (levelUpText != null)
             levelUpText.gameObject.SetActive(false);
-        
+
         if (gameOverText != null)
             gameOverText.gameObject.SetActive(false);
-        
+
         if (upgradePanel != null)
             upgradePanel.SetActive(false);
     }
@@ -46,7 +46,7 @@ public class UIManager : MonoBehaviour
         if (hpText != null)
             hpText.text = $"HP: {hp}/{maxHP}";
     }
-    
+
     public void UpdateXP(int xp, int xpToNext)
     {
         if (xpText != null)
@@ -76,7 +76,7 @@ public class UIManager : MonoBehaviour
 
     public void ShowUpgradeMenu()
     {
-        // Fallback if upgrade system not configured
+        // Fallback se upgrade system non è configurato
         if (upgradePanel == null || upgradeCardPrefab == null || upgradeCardContainer == null)
         {
             Debug.LogWarning("Upgrade Panel not configured!");
@@ -84,68 +84,67 @@ public class UIManager : MonoBehaviour
             Time.timeScale = 1f;
             return;
         }
-        
-        if (CardGenerator.Instance == null)
+
+        // Usa riferimento sicuro da GameManager se Instance non è pronto
+        CardGenerator cg = CardGenerator.Instance ?? GameManager.Instance?.cardGenerator;
+
+        if (cg == null)
         {
             Debug.LogError("CardGenerator not found!");
             Time.timeScale = 1f;
             return;
         }
-        
-        // Clear previous cards
-        foreach (GameObject card in activeUpgradeCards)
+
+        // Genera le carte usando il riferimento sicuro
+        List<UpgradeCard> cards = cg.GenerateCards(3);
+
+        // Pulizia delle carte precedenti
+        foreach (GameObject cardObj in activeUpgradeCards)
         {
-            Destroy(card);
+            Destroy(cardObj);
         }
         activeUpgradeCards.Clear();
-        
-        // Generate 3 cards
-        List<UpgradeCard> cards = CardGenerator.Instance.GenerateCards(3);
-        
+
         if (cards.Count == 0)
         {
             Debug.LogWarning("No upgrade cards available!");
             Time.timeScale = 1f;
             return;
         }
-        
-        // Create card UI
+
+        // Crea la UI delle carte
         foreach (UpgradeCard card in cards)
         {
             GameObject cardObj = Instantiate(upgradeCardPrefab, upgradeCardContainer);
-            
-            // Setup card visuals
+
             TMP_Text cardText = cardObj.GetComponentInChildren<TMP_Text>();
             if (cardText != null)
                 cardText.text = card.displayText;
-            
+
             Image cardIcon = cardObj.transform.Find("Icon")?.GetComponent<Image>();
             if (cardIcon != null && card.icon != null)
                 cardIcon.sprite = card.icon;
-            
-            // Setup button
+
             Button button = cardObj.GetComponent<Button>();
             if (button != null)
             {
-                // Capture card in closure
-                UpgradeCard selectedCard = card;
+                UpgradeCard selectedCard = card; // cattura la carta nel closure
                 button.onClick.AddListener(() => OnCardSelected(selectedCard));
             }
-            
+
             activeUpgradeCards.Add(cardObj);
         }
-        
+
         upgradePanel.SetActive(true);
     }
-
     void OnCardSelected(UpgradeCard card)
     {
         if (upgradePanel != null)
             upgradePanel.SetActive(false);
-        
+
         // Apply the card effect
         CardGenerator.Instance.ApplyCard(card);
-        
+
         // Notify player if weapon was unlocked (to refresh timers)
         if (card.cardType == CardType.WeaponUnlock)
         {
@@ -153,7 +152,7 @@ public class UIManager : MonoBehaviour
             if (player != null)
                 player.OnWeaponUnlocked();
         }
-        
+
         // Resume game
         Time.timeScale = 1f;
     }
@@ -165,19 +164,19 @@ public class UIManager : MonoBehaviour
             StopCoroutine(levelUpCoroutine);
             levelUpCoroutine = null;
         }
-        
+
         if (levelUpText != null)
             levelUpText.gameObject.SetActive(false);
-        
+
         if (upgradePanel != null)
             upgradePanel.SetActive(false);
-        
+
         if (gameOverText != null)
         {
             gameOverText.text = $"GAME OVER\n\nNemici uccisi: {Enemy.enemiesKilled}\n\nPremi R per riavviare";
             gameOverText.gameObject.SetActive(true);
         }
-        
+
         Time.timeScale = 0f;
     }
 }
