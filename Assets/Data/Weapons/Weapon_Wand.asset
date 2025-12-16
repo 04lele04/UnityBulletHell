@@ -15,7 +15,7 @@ MonoBehaviour:
   weaponName: Wand
   description: 
   icon: {fileID: 0}
-  bulletPrefab: {fileID: 4733139543642701161, guid: 688eb42615a0fd749bcbe6f2ac8ebb88, type: 3}
+  bulletPrefab: {fileID: 4733139543642701161, guid: c217de9e820a8024fb0c16528ad854f9, type: 3}
   baseDamage: 1
   fireRate: 1
   projectileCount: 1
