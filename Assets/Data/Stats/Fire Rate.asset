@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Fire Rate
   m_EditorClassIdentifier: 
   statType: 2
-  unlockDisplayText: 
-  upgradeDisplayText: 
+  unlockDisplayText: Fire Rate
+  upgradeDisplayText: Fire Rate
   description: 
   icon: {fileID: 0}
   valuePerLevel: 0.1

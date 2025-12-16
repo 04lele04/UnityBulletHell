@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd74d268b285524b83908dad5f1328e, type: 3}
   m_Name: Health
   m_EditorClassIdentifier: 
-  statType: 1
-  unlockDisplayText: 
-  upgradeDisplayText: 
+  statType: 4
+  unlockDisplayText: Health
+  upgradeDisplayText: Health
   description: 
   icon: {fileID: 0}
   valuePerLevel: 0.1

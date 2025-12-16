@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Damage
   m_EditorClassIdentifier: 
   statType: 0
-  unlockDisplayText: 
-  upgradeDisplayText: 
+  unlockDisplayText: Damage
+  upgradeDisplayText: Damage
   description: 
   icon: {fileID: 0}
   valuePerLevel: 0.1

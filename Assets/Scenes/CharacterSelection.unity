@@ -817,6 +817,12 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 6016cf8e1b70cfa47a12c603d49c63bd, type: 2}
   - {fileID: 11400000, guid: 9349cded12fb4e346a55cf0ee1d461df, type: 2}
   - {fileID: 11400000, guid: aee162f0f501f334ca5c0ed9c9deca28, type: 2}
+  allStats:
+  - {fileID: 11400000, guid: dee129f15ea5ba548b71f065752f3f5a, type: 2}
+  - {fileID: 11400000, guid: f115991bf4be3c84c976a78b19b74385, type: 2}
+  - {fileID: 11400000, guid: 60f73f79775fe9b47be3609c9129bb88, type: 2}
+  - {fileID: 11400000, guid: fcd91a0b1ca7a80448a74c7ab67b3aa0, type: 2}
+  - {fileID: 11400000, guid: f958e1020fa1a484b8f763501f8d53a7, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

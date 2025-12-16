@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Speed
   m_EditorClassIdentifier: 
   statType: 1
-  unlockDisplayText: 
-  upgradeDisplayText: 
+  unlockDisplayText: Speed
+  upgradeDisplayText: Speed
   description: 
   icon: {fileID: 0}
   valuePerLevel: 0.1

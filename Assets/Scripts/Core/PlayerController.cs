@@ -4,53 +4,39 @@ using System.Collections.Generic;
 
 public class PlayerController : MonoBehaviour
 {
-    [Header("XP / Level")]
+    [Header("XP")]
     public int level = 1;
-    public int xp = 0;
+    public int xp;
     public int xpToNextLevel = 5;
 
-    [Header("Health (from character)")]
-    private int maxHP = 3;
-    private int hp;
+    [Header("Base stats")]
+    public int baseMaxHP = 3;
+    public float baseSpeed = 6f;
 
-    [Header("Movement (from character)")]
-    private float baseSpeed = 6f;
-
-    // Weapon firing
-    private List<float> weaponFireTimers = new List<float>();
+    [Header("Current Stats (READ ONLY)")]
+    [SerializeField] private int maxHP;
+    [SerializeField] private int hp;
+    [SerializeField] private float currentSpeed;
+    [SerializeField] private float currentDamageMultiplier;
+    [SerializeField] private float currentFireRateReduction;
+    [SerializeField] private int currentBonusProjectiles;
 
     Rigidbody2D rb;
-    CharacterManager characterManager;
+    CharacterManager cm;
+    CharacterData character;
+
+    List<float> weaponFireTimers = new();
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        characterManager = CharacterManager.Instance;
+        cm = CharacterManager.Instance;
+        character = cm.GetSelectedCharacter();
 
-        if (characterManager == null)
-        {
-            Debug.LogError("CharacterManager not found! Cannot initialize player.");
-            enabled = false;
-            return;
-        }
+        maxHP = baseMaxHP;
+        hp = maxHP;
 
-        // Initialize from selected character
-        CharacterData character = characterManager.GetSelectedCharacter();
-        if (character != null)
-        {
-            maxHP = character.baseMaxHP;
-            baseSpeed = character.baseSpeed;
-            hp = maxHP;
-
-            Debug.Log($"Playing as: {character.characterName}");
-            Debug.Log($"Passive: {character.passiveDescription}");
-        }
-        else
-        {
-            Debug.LogError("No character selected!");
-        }
-
-        // Initialize weapon timers
+        RecalculateStats();
         RefreshWeaponTimers();
 
         UIManager.Instance.UpdateHP(hp, maxHP);
@@ -61,13 +47,44 @@ public class PlayerController : MonoBehaviour
     {
         Move();
         ShootAllWeapons();
-
-        if (Time.timeScale == 0f && Input.GetKeyDown(KeyCode.R))
-        {
-            ReplayGame();
-        }
     }
 
+    // ✅ RICALCOLA TUTTE LE STAT (chiamala dopo ogni upgrade!)
+    public void RecalculateStats()
+    {
+        // Health (ADDITIVO: +1 per livello)
+        float healthBonus = cm.GetStatBonus(StatType.Health);
+        int oldMaxHP = maxHP;
+        maxHP = baseMaxHP + Mathf.RoundToInt(healthBonus);
+
+        // Se maxHP aumenta, cura proporzionalmente
+        if (maxHP > oldMaxHP)
+        {
+            float hpRatio = (float)hp / oldMaxHP;
+            hp = Mathf.RoundToInt(maxHP * hpRatio);
+        }
+        hp = Mathf.Min(hp, maxHP);
+
+        // Speed (MOLTIPLICATIVO: x1.5 per livello)
+        float speedBonus = cm.GetStatBonus(StatType.Speed);
+        currentSpeed = baseSpeed * (1f + speedBonus);
+
+        // Damage (MOLTIPLICATIVO: x1.5 per livello)
+        currentDamageMultiplier = 1f + cm.GetStatBonus(StatType.Damage);
+
+        // Fire Rate (RIDUZIONE: -33% per livello, max 80%)
+        currentFireRateReduction = cm.GetStatBonus(StatType.FireRate);
+
+        // Projectiles (ADDITIVO: +1 per livello)
+        currentBonusProjectiles = Mathf.RoundToInt(
+            cm.GetStatBonus(StatType.ProjectileQuantity));
+
+        UIManager.Instance.UpdateHP(hp, maxHP);
+
+        Debug.Log($"📊 Stats Updated | HP: {hp}/{maxHP} (+{healthBonus:F0}) | Speed: {currentSpeed:F1} (x{1f + speedBonus:F2}) | Dmg: x{currentDamageMultiplier:F2} | FireRate: -{currentFireRateReduction * 100:F0}% | Projectiles: +{currentBonusProjectiles}");
+    }
+
+    // ---------------- MOVE ----------------
     void Move()
     {
         Vector2 input = new Vector2(
@@ -75,36 +92,25 @@ public class PlayerController : MonoBehaviour
             Input.GetAxisRaw("Vertical")
         ).normalized;
 
-        // Apply speed stat multiplier
-        float speedMultiplier = 1f + characterManager.GetStatMultiplier(StatType.Speed);
-        float finalSpeed = baseSpeed * speedMultiplier;
-
-        rb.linearVelocity = input * finalSpeed;
+        rb.linearVelocity = input * currentSpeed;
     }
 
+    // ---------------- SHOOT ----------------
     void ShootAllWeapons()
     {
-        List<WeaponInstance> weapons = characterManager.GetEquippedWeapons();
+        var weapons = cm.GetEquippedWeapons();
 
-        // Ensure we have enough timers
         while (weaponFireTimers.Count < weapons.Count)
-        {
             weaponFireTimers.Add(0f);
-        }
 
         for (int i = 0; i < weapons.Count; i++)
         {
-            WeaponInstance weapon = weapons[i];
             weaponFireTimers[i] -= Time.deltaTime;
 
             if (weaponFireTimers[i] <= 0f)
             {
-                // Apply fire rate stat multiplier (lower is better)
-                float fireRateMultiplier = 1f - characterManager.GetStatMultiplier(StatType.FireRate);
-                fireRateMultiplier = Mathf.Max(0.1f, fireRateMultiplier); // Prevent zero or negative
-
-                weaponFireTimers[i] = weapon.fireRate * fireRateMultiplier;
-                FireWeapon(weapon);
+                weaponFireTimers[i] = weapons[i].fireRate * (1f - currentFireRateReduction);
+                FireWeapon(weapons[i]);
             }
         }
     }
@@ -116,63 +122,45 @@ public class PlayerController : MonoBehaviour
 
         Vector2 baseDir = (target.transform.position - transform.position).normalized;
 
-        // Apply projectile quantity stat (additive)
-        int bonusProjectiles = Mathf.RoundToInt(characterManager.GetStatMultiplier(StatType.ProjectileQuantity));
-        int totalProjectiles = weapon.projectileCount + bonusProjectiles;
+        int totalProjectiles = weapon.projectileCount + currentBonusProjectiles;
 
-        // Shoot multiple projectiles with spread
         for (int i = 0; i < totalProjectiles; i++)
         {
-            float angle = 0f;
-
-            if (totalProjectiles > 1)
-            {
-                float totalSpread = weapon.spreadAngle * (totalProjectiles - 1);
-                angle = -totalSpread / 2 + (weapon.spreadAngle * i);
-            }
+            float angle = totalProjectiles > 1
+                ? (-weapon.spreadAngle * (totalProjectiles - 1) / 2f) + weapon.spreadAngle * i
+                : 0f;
 
             Vector2 dir = Quaternion.Euler(0, 0, angle) * baseDir;
 
-            PlayerBullet bullet = Instantiate(weapon.data.bulletPrefab, transform.position, Quaternion.identity)
-                .GetComponent<PlayerBullet>();
+            PlayerBullet bullet = Instantiate(
+                weapon.data.bulletPrefab,
+                transform.position,
+                Quaternion.identity).GetComponent<PlayerBullet>();
 
-            if (bullet != null)
-            {
-                // Apply damage stat multiplier (percentage increase)
-                float damageMultiplier = 1f + characterManager.GetStatMultiplier(StatType.Damage);
-                int finalDamage = Mathf.RoundToInt(weapon.damage * damageMultiplier);
-
-                bullet.damage = finalDamage;
-                bullet.speed = weapon.bulletSpeed;
-                bullet.Init(dir);
-            }
+            bullet.damage = Mathf.RoundToInt(weapon.damage * currentDamageMultiplier);
+            bullet.speed = weapon.bulletSpeed;
+            bullet.Init(dir);
         }
     }
 
-    Enemy FindNearestEnemy()
+    // ---------------- HEALTH ----------------
+    public void TakeDamage()
     {
-        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);
-        float minDist = Mathf.Infinity;
-        Enemy nearest = null;
+        hp--;
+        UIManager.Instance.UpdateHP(hp, maxHP);
 
-        foreach (Enemy e in enemies)
+        if (hp <= 0)
         {
-            float d = Vector2.Distance(transform.position, e.transform.position);
-            if (d < minDist)
-            {
-                minDist = d;
-                nearest = e;
-            }
+            UIManager.Instance.ShowGameOver();
+            Time.timeScale = 0f;
         }
-
-        return nearest;
     }
 
+    // ---------------- XP ----------------
     public void GainXP(int amount)
     {
         xp += amount;
         UIManager.Instance.UpdateXP(xp, xpToNextLevel);
-        Debug.Log($"XP GAINED: +{amount} ({xp}/{xpToNextLevel})");
 
         if (xp >= xpToNextLevel)
             LevelUp();
@@ -184,46 +172,36 @@ public class PlayerController : MonoBehaviour
         xp = 0;
         xpToNextLevel = Mathf.RoundToInt(xpToNextLevel * 1.5f);
 
-        UIManager.Instance.UpdateXP(xp, xpToNextLevel);
         UIManager.Instance.ShowUpgradeMenu();
-
-        // Pause the game during upgrade selection
         Time.timeScale = 0f;
     }
 
-    public void TakeDamage()
+    // ---------------- UTILS ----------------
+    Enemy FindNearestEnemy()
     {
-        hp--;
-        UIManager.Instance.UpdateHP(hp, maxHP);
+        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+        Enemy nearest = null;
+        float minDist = Mathf.Infinity;
 
-        if (hp <= 0)
+        foreach (Enemy e in enemies)
         {
-            Debug.Log("PLAYER DEAD — GAME OVER");
-            UIManager.Instance.ShowGameOver();
-            Time.timeScale = 0f;
+            float d = Vector2.Distance(transform.position, e.transform.position);
+            if (d < minDist)
+            {
+                minDist = d;
+                nearest = e;
+            }
         }
+        return nearest;
     }
 
-    void ReplayGame()
-    {
-        Time.timeScale = 1f;
-        Enemy.enemiesKilled = 0;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-    }
-
-    // Helper to refresh weapon timers when weapons are added
     void RefreshWeaponTimers()
     {
-        List<WeaponInstance> weapons = characterManager.GetEquippedWeapons();
         weaponFireTimers.Clear();
-
-        foreach (WeaponInstance weapon in weapons)
-        {
-            weaponFireTimers.Add(0f); // Start ready to fire
-        }
+        foreach (var _ in cm.GetEquippedWeapons())
+            weaponFireTimers.Add(0f);
     }
 
-    // Called by UIManager when a weapon is unlocked
     public void OnWeaponUnlocked()
     {
         RefreshWeaponTimers();

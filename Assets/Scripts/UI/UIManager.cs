@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -23,6 +24,7 @@ public class UIManager : MonoBehaviour
 
     private Coroutine levelUpCoroutine;
     private List<GameObject> activeUpgradeCards = new List<GameObject>();
+    private bool isGameOver = false;
 
     void Awake()
     {
@@ -39,6 +41,17 @@ public class UIManager : MonoBehaviour
 
         if (upgradePanel != null)
             upgradePanel.SetActive(false);
+
+        isGameOver = false;
+    }
+
+    void Update()
+    {
+        // ✅ Controlla R per restart anche quando Time.timeScale = 0
+        if (isGameOver && Input.GetKeyDown(KeyCode.R))
+        {
+            RestartGame();
+        }
     }
 
     public void UpdateHP(int hp, int maxHP)
@@ -68,7 +81,7 @@ public class UIManager : MonoBehaviour
         if (levelUpText != null)
         {
             levelUpText.gameObject.SetActive(true);
-            yield return new WaitForSecondsRealtime(1.5f); // Use realtime since game is paused
+            yield return new WaitForSecondsRealtime(1.5f);
             levelUpText.gameObject.SetActive(false);
         }
         levelUpCoroutine = null;
@@ -76,7 +89,6 @@ public class UIManager : MonoBehaviour
 
     public void ShowUpgradeMenu()
     {
-        // Fallback se upgrade system non è configurato
         if (upgradePanel == null || upgradeCardPrefab == null || upgradeCardContainer == null)
         {
             Debug.LogWarning("Upgrade Panel not configured!");
@@ -85,7 +97,6 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        // Usa riferimento sicuro da GameManager se Instance non è pronto
         CardGenerator cg = CardGenerator.Instance ?? GameManager.Instance?.cardGenerator;
 
         if (cg == null)
@@ -95,10 +106,8 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        // Genera le carte usando il riferimento sicuro
         List<UpgradeCard> cards = cg.GenerateCards(3);
 
-        // Pulizia delle carte precedenti
         foreach (GameObject cardObj in activeUpgradeCards)
         {
             Destroy(cardObj);
@@ -112,7 +121,6 @@ public class UIManager : MonoBehaviour
             return;
         }
 
-        // Crea la UI delle carte
         foreach (UpgradeCard card in cards)
         {
             GameObject cardObj = Instantiate(upgradeCardPrefab, upgradeCardContainer);
@@ -128,7 +136,7 @@ public class UIManager : MonoBehaviour
             Button button = cardObj.GetComponent<Button>();
             if (button != null)
             {
-                UpgradeCard selectedCard = card; // cattura la carta nel closure
+                UpgradeCard selectedCard = card;
                 button.onClick.AddListener(() => OnCardSelected(selectedCard));
             }
 
@@ -137,28 +145,28 @@ public class UIManager : MonoBehaviour
 
         upgradePanel.SetActive(true);
     }
+
     void OnCardSelected(UpgradeCard card)
     {
         if (upgradePanel != null)
             upgradePanel.SetActive(false);
 
-        // Apply the card effect
         CardGenerator.Instance.ApplyCard(card);
 
-        // Notify player if weapon was unlocked (to refresh timers)
         if (card.cardType == CardType.WeaponUnlock)
         {
-            PlayerController player = FindObjectOfType<PlayerController>();
+            PlayerController player = FindFirstObjectByType<PlayerController>();
             if (player != null)
                 player.OnWeaponUnlocked();
         }
 
-        // Resume game
         Time.timeScale = 1f;
     }
 
     public void ShowGameOver()
     {
+        isGameOver = true;
+
         if (levelUpCoroutine != null)
         {
             StopCoroutine(levelUpCoroutine);
@@ -178,5 +186,26 @@ public class UIManager : MonoBehaviour
         }
 
         Time.timeScale = 0f;
+    }
+
+    void RestartGame()
+    {
+        Debug.Log("🔄 Restarting game...");
+
+        // Reset time scale
+        Time.timeScale = 1f;
+
+        // Reset enemy counter
+        Enemy.enemiesKilled = 0;
+
+        // ✅ DISTRUGGI I MANAGER PERSISTENTI (così vengono ricreati freschi)
+        if (CharacterManager.Instance != null)
+            Destroy(CharacterManager.Instance.gameObject);
+
+        if (CardGenerator.Instance != null)
+            Destroy(CardGenerator.Instance.gameObject);
+
+        // Reload scene
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }

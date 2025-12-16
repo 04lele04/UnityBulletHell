@@ -21,16 +21,18 @@ public class CardGenerator : MonoBehaviour
 
     public List<UpgradeCard> GenerateCards(int count)
     {
-        List<UpgradeCard> possibleCards = new List<UpgradeCard>();
         CharacterManager cm = CharacterManager.Instance;
-
         if (cm == null)
         {
             Debug.LogError("CharacterManager not found!");
-            return possibleCards;
+            return new List<UpgradeCard>();
         }
 
-        // 1. Weapon Unlock Cards (only if can equip more)
+        // Crea pool separati
+        List<UpgradeCard> weaponCards = new List<UpgradeCard>();
+        List<UpgradeCard> statCards = new List<UpgradeCard>();
+
+        // 1. Weapon Cards (Unlock + Upgrade)
         if (cm.CanEquipMoreWeapons())
         {
             foreach (WeaponData weapon in cm.allWeapons)
@@ -43,36 +45,40 @@ public class CardGenerator : MonoBehaviour
                         weapon.icon
                     );
                     card.weaponToUnlock = weapon;
-                    possibleCards.Add(card);
+                    weaponCards.Add(card);
                 }
             }
         }
 
-        // 2. Weapon Upgrade Cards (only for owned weapons)
         foreach (WeaponInstance weapon in cm.GetEquippedWeapons())
         {
-            // Find all upgrades for this weapon
             var upgrades = cm.allWeaponUpgrades.Where(u => u.targetWeapon == weapon.data);
-
             foreach (WeaponUpgradeData upgrade in upgrades)
             {
                 string displayText = GetWeaponUpgradeDisplay(weapon, upgrade.upgradeType);
-
                 UpgradeCard card = new UpgradeCard(
                     CardType.WeaponUpgrade,
                     displayText,
                     upgrade.icon ?? weapon.data.icon
                 );
                 card.weaponUpgrade = upgrade;
-                possibleCards.Add(card);
+                weaponCards.Add(card);
             }
         }
 
-        // 3. Stat Unlock Cards (only if can unlock more)
+        // 2. Stat Cards (Unlock + Upgrade)
+        Debug.Log($"=== STAT CARD GENERATION DEBUG ===");
+        Debug.Log($"CanUnlockMoreStats: {cm.CanUnlockMoreStats()}");
+
         if (cm.CanUnlockMoreStats())
         {
-            foreach (StatInstance stat in cm.GetCharacterStats())
+            var allStats = cm.GetCharacterStats();
+            Debug.Log($"Total stats found: {allStats.Count}");
+
+            foreach (StatInstance stat in allStats)
             {
+                Debug.Log($"Stat: {stat.data.unlockDisplayText}, IsUnlocked: {stat.isUnlocked}");
+
                 if (!stat.isUnlocked)
                 {
                     UpgradeCard card = new UpgradeCard(
@@ -81,13 +87,16 @@ public class CardGenerator : MonoBehaviour
                         stat.data.icon
                     );
                     card.statUpgrade = stat.data;
-                    possibleCards.Add(card);
+                    statCards.Add(card);
+                    Debug.Log($"✅ Added StatUnlock card: {stat.data.unlockDisplayText}");
                 }
             }
         }
 
-        // 4. Stat Upgrade Cards (only for unlocked stats)
-        foreach (StatInstance stat in cm.GetCharacterStats())
+        var allStatsForUpgrade = cm.GetCharacterStats();
+        Debug.Log($"Checking stats for upgrade, total: {allStatsForUpgrade.Count}");
+
+        foreach (StatInstance stat in allStatsForUpgrade)
         {
             if (stat.isUnlocked)
             {
@@ -97,27 +106,97 @@ public class CardGenerator : MonoBehaviour
                     stat.data.icon
                 );
                 card.statUpgrade = stat.data;
-                possibleCards.Add(card);
+                statCards.Add(card);
+                Debug.Log($"✅ Added StatUpgrade card: {stat.data.upgradeDisplayText}");
             }
         }
 
-        // Shuffle and return requested count
-        if (possibleCards.Count == 0)
+        Debug.Log($"=== FINAL COUNTS ===");
+        Debug.Log($"Weapon Cards: {weaponCards.Count}");
+        Debug.Log($"Stat Cards: {statCards.Count}");
+
+        // 3. DISTRIBUZIONE INTELLIGENTE (priorità agli stat se disponibili)
+        List<UpgradeCard> finalCards = new List<UpgradeCard>();
+
+        // Se ci sono stat cards, garantisci almeno 1-2 stat cards
+        int guaranteedStatCards = 0;
+        if (statCards.Count > 0)
         {
-            Debug.LogWarning("No possible cards to generate!");
-            return possibleCards;
+            // Se richieste 3 carte, almeno 1 stat
+            // Se richieste 4+ carte, almeno 2 stat
+            guaranteedStatCards = count >= 4 ? 2 : 1;
+            guaranteedStatCards = Mathf.Min(guaranteedStatCards, statCards.Count);
         }
 
-        // Fisher-Yates shuffle
-        for (int i = 0; i < possibleCards.Count; i++)
+        int weaponCount = count - guaranteedStatCards;
+
+        Debug.Log($"Distribution: {weaponCount} weapons, {guaranteedStatCards} stats (guaranteed)");
+
+        // Shuffle entrambe le liste
+        ShuffleList(weaponCards);
+        ShuffleList(statCards);
+
+        // Aggiungi carte armi
+        int weaponsAdded = 0;
+        for (int i = 0; i < weaponCount && i < weaponCards.Count; i++)
         {
-            int randomIndex = Random.Range(i, possibleCards.Count);
-            UpgradeCard temp = possibleCards[i];
-            possibleCards[i] = possibleCards[randomIndex];
-            possibleCards[randomIndex] = temp;
+            finalCards.Add(weaponCards[i]);
+            weaponsAdded++;
         }
 
-        return possibleCards.GetRange(0, Mathf.Min(count, possibleCards.Count));
+        // Aggiungi carte stat (garantite)
+        int statsAdded = 0;
+        for (int i = 0; i < guaranteedStatCards && i < statCards.Count; i++)
+        {
+            finalCards.Add(statCards[i]);
+            statsAdded++;
+        }
+
+        // Se mancano carte per raggiungere 'count', riempi con quello che resta
+        int remaining = count - finalCards.Count;
+        if (remaining > 0)
+        {
+            // Prima prova ad aggiungere altre stat cards
+            for (int i = statsAdded; i < statCards.Count && remaining > 0; i++)
+            {
+                finalCards.Add(statCards[i]);
+                remaining--;
+            }
+
+            // Poi altre weapon cards
+            for (int i = weaponsAdded; i < weaponCards.Count && remaining > 0; i++)
+            {
+                finalCards.Add(weaponCards[i]);
+                remaining--;
+            }
+        }
+
+        // Mescola il risultato finale
+        ShuffleList(finalCards);
+
+        Debug.Log($"✅ Final cards returned: {finalCards.Count}");
+        foreach (var card in finalCards)
+        {
+            Debug.Log($"  → {card.cardType}: {card.displayText.Split('\n')[0]}");
+        }
+
+        if (finalCards.Count == 0)
+        {
+            Debug.LogWarning("⚠️ No possible cards to generate!");
+        }
+
+        return finalCards;
+    }
+
+    void ShuffleList<T>(List<T> list)
+    {
+        for (int i = 0; i < list.Count; i++)
+        {
+            int randomIndex = Random.Range(i, list.Count);
+            T temp = list[i];
+            list[i] = list[randomIndex];
+            list[randomIndex] = temp;
+        }
     }
 
     string GetWeaponUpgradeDisplay(WeaponInstance weapon, WeaponUpgradeType upgradeType)
@@ -166,6 +245,13 @@ public class CardGenerator : MonoBehaviour
                 if (card.statUpgrade != null)
                     cm.UpgradeStat(card.statUpgrade);
                 break;
+        }
+
+        // ✅ CRUCIALE: Ricalcola le stat del player dopo ogni upgrade!
+        PlayerController player = FindFirstObjectByType<PlayerController>();
+        if (player != null)
+        {
+            player.RecalculateStats();
         }
     }
 }

@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Projectile Quantity
   m_EditorClassIdentifier: 
   statType: 3
-  unlockDisplayText: 
-  upgradeDisplayText: 
+  unlockDisplayText: Projectile Quantity
+  upgradeDisplayText: Projectile Quantity
   description: 
   icon: {fileID: 0}
   valuePerLevel: 0.1
