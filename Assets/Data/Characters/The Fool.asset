@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: The Wanderer
   description: Balanced starter character
-  portrait: {fileID: 0}
+  portrait: {fileID: -5996337983693460025, guid: 8df37220957435b459182aa7624494e3, type: 3}
   arcanaNumber: 0
   arcanaName: The Fool
   baseSpeed: 6

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterName: The Arcane Master
   description: High damage, low health
-  portrait: {fileID: 0}
+  portrait: {fileID: -1865597995143680422, guid: 3b392467931ae4540b64e6c06c7092f8, type: 3}
   arcanaNumber: 1
   arcanaName: The Magician
   baseSpeed: 5
